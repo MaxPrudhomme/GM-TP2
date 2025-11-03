@@ -133,4 +133,25 @@ class Mesh {
         }
         try parse(from: url.path)
     }
+    
+    func center() {
+        let sum = vertices.reduce(SIMD3<Float>(0, 0, 0)) { $0 + $1 }
+        let center = sum / Float(vertices.count)
+        
+        for i in 0..<vertices.count {
+            vertices[i] -= center
+        }
+    }
+    
+    func normalize() {
+        let maxCoord = vertices.reduce(Float(0)) { currentMax, vertex in
+            let vertexMax = max(abs(vertex.x), abs(vertex.y), abs(vertex.z))
+            return max(currentMax, vertexMax)
+        }
+        
+        for i in 0..<vertices.count {
+            let scale: Float = 1.0 / maxCoord
+            vertices[i] *= scale
+        }
+    }
 }
