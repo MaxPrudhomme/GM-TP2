@@ -18,6 +18,7 @@ import SceneKit
 
 struct GeometryPreview: NSViewRepresentable {
     var geometryBuilder: (() -> SCNNode)?
+    let showWire: Bool
 
     func makeNSView(context: Context) -> SCNView {
         let view = CustomSCNView()
@@ -28,7 +29,11 @@ struct GeometryPreview: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: SCNView, context: Context) {}
+    func updateNSView(_ nsView: SCNView, context: Context) {
+        if let geometryNode = nsView.scene?.rootNode.childNodes.first {
+            geometryNode.childNodes.last?.isHidden = !showWire
+        }
+    }
 
     class CustomSCNView: SCNView {
         private var lastMiddleDrag: CGPoint?
@@ -76,15 +81,15 @@ struct GeometryPreview: NSViewRepresentable {
         // --- lights ---
         let light = SCNLight()
         light.type = .omni
-        light.intensity = 900
+        light.intensity = 2000
         let lightNode = SCNNode()
         lightNode.light = light
-        lightNode.position = SCNVector3(2, 3, 4)
+        lightNode.position = SCNVector3(20, 30, 4)
         scene.rootNode.addChildNode(lightNode)
 
         let amb = SCNLight()
         amb.type = .ambient
-        amb.intensity = 300
+        amb.intensity = 100
         let ambNode = SCNNode()
         ambNode.light = amb
         scene.rootNode.addChildNode(ambNode)

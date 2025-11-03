@@ -18,15 +18,17 @@ import SwiftUI
 import simd
 
 class Mesh {
+    static var renderWire: Bool = true
+
     var vertices: [SIMD3<Float>] = []
     var indices: [UInt16] = []
-    var normals: [SIMD3<Float>]? = nil
+    var normals: [SIMD3<Float>] = []
 
     func makeNode() -> SCNNode {
         let vsrc = SCNGeometrySource(
             vertices: vertices.map { SCNVector3($0.x, $0.y, $0.z) }
         )
-        let nrm = normals ?? Array(repeating: [0, 0, 1], count: vertices.count)
+        let nrm = normals.isEmpty ? Array(repeating: SIMD3<Float>(0, 0, 1), count: vertices.count) : normals
         let nsrc = SCNGeometrySource(
             normals: nrm.map { SCNVector3($0.x, $0.y, $0.z) }
         )
@@ -46,33 +48,35 @@ class Mesh {
         let wire = SCNGeometry(sources: [vsrc, nsrc], elements: [elem])
         let wireMat = SCNMaterial()
         wireMat.fillMode = .lines
-        wireMat.lightingModel = .constant
+        wireMat.lightingModel = .lambert
         #if os(macOS)
         wireMat.diffuse.contents = NSColor.black
         #else
         wireMat.diffuse.contents = UIColor.black
         #endif
-        wireMat.isDoubleSided = true
+        wireMat.isDoubleSided = false
         wire.materials = [wireMat]
 
         // white fill
         let base = wire.copy() as! SCNGeometry
         let fillMat = SCNMaterial()
-        fillMat.lightingModel = .constant
+        fillMat.lightingModel = .lambert
         #if os(macOS)
         fillMat.diffuse.contents = NSColor.white
         #else
         fillMat.diffuse.contents = UIColor.white
         #endif
-        fillMat.isDoubleSided = true
+        fillMat.isDoubleSided = false
         base.materials = [fillMat]
 
         let parent = SCNNode()
-        parent.addChildNode(SCNNode(geometry: wire))
-        
         let fillNode = SCNNode(geometry: base)
         fillNode.scale = SCNVector3(0.997, 0.997, 0.997)
         parent.addChildNode(fillNode)
+        
+        if Mesh.renderWire {
+            parent.addChildNode(SCNNode(geometry: wire))
+        }
         
         return parent
     }
@@ -154,4 +158,37 @@ class Mesh {
             vertices[i] *= scale
         }
     }
+    
+    func makeNormals() {
+        var normalCounts = Array(repeating: 0, count: vertices.count)
+        normals = Array(repeating: SIMD3<Float>(0, 0, 0), count: vertices.count)
+        
+        for i in stride(from: 0, to: indices.count, by: 3) {
+            let ia = Int(indices[i])
+            let ib = Int(indices[i + 1])
+            let ic = Int(indices[i + 2])
+            
+            guard ia < vertices.count, ib < vertices.count, ic < vertices.count else { continue }
+            
+            let a = vertices[ia]
+            let b = vertices[ib]
+            let c = vertices[ic]
+            let faceNormal = simd_normalize(simd_cross(b - a, c - a))
+            
+            normals[ia] += faceNormal
+            normals[ib] += faceNormal
+            normals[ic] += faceNormal
+            normalCounts[ia] += 1
+            normalCounts[ib] += 1
+            normalCounts[ic] += 1
+        }
+        
+        for i in 0..<normals.count {
+            if normalCounts[i] > 0 {
+                normals[i] /= Float(normalCounts[i])
+                normals[i] = simd_normalize(normals[i])
+            }
+        }
+    }
 }
+
