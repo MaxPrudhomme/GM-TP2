@@ -1,0 +1,136 @@
+//
+//  Mesh.swift
+//  GM-TP2
+//
+//  Created by Max PRUDHOMME on 03/11/2025.
+//
+
+
+//
+//  Mesh.swift
+//  GM-TP1
+//
+//  Created by Max PRUDHOMME on 20/10/2025.
+//
+
+import SceneKit
+import SwiftUI
+import simd
+
+class Mesh {
+    var vertices: [SIMD3<Float>] = []
+    var indices: [UInt16] = []
+    var normals: [SIMD3<Float>]? = nil
+
+    func makeNode() -> SCNNode {
+        let vsrc = SCNGeometrySource(
+            vertices: vertices.map { SCNVector3($0.x, $0.y, $0.z) }
+        )
+        let nrm = normals ?? Array(repeating: [0, 0, 1], count: vertices.count)
+        let nsrc = SCNGeometrySource(
+            normals: nrm.map { SCNVector3($0.x, $0.y, $0.z) }
+        )
+
+        let indicesData = indices.withUnsafeBufferPointer { buffer in
+            Data(buffer: buffer)
+        }
+
+        let elem = SCNGeometryElement(
+            data: indicesData,
+            primitiveType: .triangles,
+            primitiveCount: indices.count / 3,
+            bytesPerIndex: MemoryLayout<UInt16>.size
+        )
+
+        // black wire
+        let wire = SCNGeometry(sources: [vsrc, nsrc], elements: [elem])
+        let wireMat = SCNMaterial()
+        wireMat.fillMode = .lines
+        wireMat.lightingModel = .constant
+        #if os(macOS)
+        wireMat.diffuse.contents = NSColor.black
+        #else
+        wireMat.diffuse.contents = UIColor.black
+        #endif
+        wireMat.isDoubleSided = true
+        wire.materials = [wireMat]
+
+        // white fill
+        let base = wire.copy() as! SCNGeometry
+        let fillMat = SCNMaterial()
+        fillMat.lightingModel = .constant
+        #if os(macOS)
+        fillMat.diffuse.contents = NSColor.white
+        #else
+        fillMat.diffuse.contents = UIColor.white
+        #endif
+        fillMat.isDoubleSided = true
+        base.materials = [fillMat]
+
+        let parent = SCNNode()
+        parent.addChildNode(SCNNode(geometry: wire))
+        
+        let fillNode = SCNNode(geometry: base)
+        fillNode.scale = SCNVector3(0.997, 0.997, 0.997)
+        parent.addChildNode(fillNode)
+        
+        return parent
+    }
+    
+    func parse(from path: String) throws {
+            let content = try String(contentsOfFile: path, encoding: .utf8)
+            var lines = content
+                .split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+
+            guard lines.first == "OFF" else { throw NSError(domain: "OFFParser", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing OFF header"]) }
+            lines.removeFirst()
+            
+            let counts = lines.removeFirst().split(separator: " ").compactMap { Int($0) }
+            guard counts.count >= 3 else { throw NSError(domain: "OFFParser", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid counts line"]) }
+
+            let vertexCount = counts[0]
+            let faceCount = counts[1]
+
+            vertices.removeAll()
+            for i in 0..<vertexCount {
+                let parts = lines.removeFirst().split(separator: " ").compactMap { Float($0) }
+                guard parts.count == 3 else {
+                    throw NSError(
+                        domain: "OFFParser",
+                        code: 3,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid vertex line \(i)"]
+                    )
+                }
+                vertices.append(SIMD3(parts[0], parts[1], parts[2]))
+            }
+
+            indices.removeAll()
+            for i in 0..<faceCount {
+                let parts = lines.removeFirst().split(separator: " ").compactMap { Int($0) }
+                guard parts.count >= 4 else {
+                    throw NSError(
+                        domain: "OFFParser",
+                        code: 4,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid face line \(i)"]
+                    )
+                }
+                let faceIndices = Array(parts[1...])
+                for idx in faceIndices {
+                    indices.append(UInt16(idx))
+                }
+            }
+
+            normals = Array(repeating: SIMD3<Float>(0, 0, 1), count: vertices.count)
+        }
+    
+    func load(named name: String, withExtension ext: String = "off") throws {
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
+            throw NSError(domain: "Mesh", code: 404, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to find \(name).\(ext) in bundle."
+            ])
+        }
+        try parse(from: url.path)
+    }
+}
