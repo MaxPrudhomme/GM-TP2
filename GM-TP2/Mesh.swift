@@ -190,5 +190,23 @@ class Mesh {
             }
         }
     }
+    
+    func export(to path: String) throws {
+        var content = "OFF\n"
+        content += "\(vertices.count) \(indices.count / 3) 0\n"
+        
+        for vertex in vertices {
+            content += "\(vertex.x) \(vertex.y) \(vertex.z)\n"
+        }
+        
+        for i in stride(from: 0, to: indices.count, by: 3) {
+            let a = indices[i]
+            let b = indices[i + 1]
+            let c = indices[i + 2]
+            content += "3 \(a) \(b) \(c)\n"
+        }
+        
+        try content.write(toFile: path, atomically: true, encoding: .utf8)
+    }
 }
 
